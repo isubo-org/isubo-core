@@ -1,7 +1,6 @@
 import path from 'path';
 import clipboard from 'clipboardy';
 import { ConfReader } from './lib/conf_reader.js';
-import { hinter } from './lib/hinter.js';
 import { PostManager } from './lib/post_manager.js';
 import { PostParse } from './lib/post_parse.js';
 import { AssetPublisher } from './lib/asset_publisher.js';
@@ -78,12 +77,6 @@ export class IsuboCore {
     if (isFunction(hooks.beforeDeploy)) {
       this.#hooks.beforeDeploy = hooks.beforeDeploy;
     }
-  }
-
-  // eslint-disable-next-line class-methods-use-this
-  #getLoadHintTextBy({ filepath, type }) {
-    const { postTitle } = postPath.parse(filepath);
-    return `${type} post: ${postTitle}`;
   }
 
   /**
@@ -242,25 +235,23 @@ export class IsuboCore {
     return ret;
   }
 
-  async #publishOneBy({ filepath }) {
+  async #publishOneBy({
+    filepath,
+    hintUpdate
+  } = {}) {
     let type;
-    const getLoadOpt = (hinterType) => ({
-      text: this.#getLoadHintTextBy({
-        type: hinterType,
-        filepath,
-      }),
-    });
+    const lastHintUpdate = hintUpdate || (() => {});
     const { frontmatter } = this.#getPostDetailBy({ filepath });
     if (frontmatter.issue_number) {
       type = enumDeployType.UPDATE;
-      hinter.loadUpdate(filepath, getLoadOpt(type));
+      lastHintUpdate(type, filepath);
       return {
         type,
         ret: await this.#updateOneBy({ filepath }),
       };
     }
     type = enumDeployType.CREATE;
-    hinter.loadUpdate(filepath, getLoadOpt(type));
+    lastHintUpdate(type, filepath);
     return {
       type,
       ret: await this.#createOneBy({ filepath }),
@@ -287,7 +278,11 @@ export class IsuboCore {
 
   async create({
     filepathArr,
+    hint,
   } = {}) {
+    const hintStart = hint?.start || (() => {});
+    const hintSucc = hint?.succ|| (() => {});
+    const hintFail = hint?.fail || (() => {});
     const STR_TPYE = enumDeployType.CREATE;
     const retArr = [];
 
@@ -299,13 +294,16 @@ export class IsuboCore {
 
     await this.#requestQueue(filepathArr.map((filepath) => async () => {
       try {
-        hinter.load(filepath, { text: this.#getLoadHintTextBy({ type: STR_TPYE, filepath }) });
+        hintStart(STR_TPYE, filepath);
         await this.#hooks.beforeDeploy();
         retArr.push(await this.#createOneBy({ filepath }));
-        hinter.loadSucc(filepath);
+        hintSucc(filepath);
       } catch (error) {
         const { postTitle } = postPath.parse(filepath);
-        hinter.loadFail(filepath, { text: `${STR_TPYE} ${postTitle}: ${error.message}  ` });
+        hintFail(STR_TPYE, filepath, {
+          errMsg: error.message,
+          postTitle,
+        });
         throw error;
       }
     }));
@@ -318,7 +316,11 @@ export class IsuboCore {
 
   async update({
     filepathArr,
+    hint
   } = {}) {
+    const hintStart = hint?.start || (() => {});
+    const hintSucc = hint?.succ|| (() => {});
+    const hintFail = hint?.fail || (() => {});
     const STR_TPYE = enumDeployType.UPDATE;
     const retArr = [];
 
@@ -328,13 +330,16 @@ export class IsuboCore {
 
     await this.#requestQueue(filepathArr.map((filepath) => async () => {
       try {
-        hinter.load(filepath, { text: this.#getLoadHintTextBy({ type: STR_TPYE, filepath }) });
+        hintStart(STR_TPYE, filepath);
         await this.#hooks.beforeDeploy();
         retArr.push(await this.#updateOneBy({ filepath }));
-        hinter.loadSucc(filepath);
+        hintSucc(filepath);
       } catch (error) {
         const { postTitle } = postPath.parse(filepath);
-        hinter.loadFail(filepath, { text: `${STR_TPYE} ${postTitle}: ${error.message}` });
+        hintFail(STR_TPYE, filepath, {
+          errMsg: error.message,
+          postTitle,
+        });
         throw error;
       }
     }));
@@ -345,9 +350,15 @@ export class IsuboCore {
   }
 
   async publish({
-    filepathArr
+    filepathArr,
+    hint
   } = {}) {
     let type = enumDeployType.PUBLISH;
+    const hintStart = hint?.start || (() => {});
+    const hintStartUpdate = hint?.startUpdate || (() => {});
+    const hintSucc = hint?.succ|| (() => {});
+    const hintFail = hint?.fail || (() => {});
+    const hintErr = hint?.err || (() => {});
     const retArr = [];
 
     if (!filepathArr?.length) {
@@ -356,22 +367,25 @@ export class IsuboCore {
 
     await this.#requestQueue(filepathArr.map((filepath) => async () => {
       try {
-        hinter.load(filepath, { text: this.#getLoadHintTextBy({ type, filepath }) });
+        hintStart(type, filepath);
         await this.#hooks.beforeDeploy();
-        const resp = await this.#publishOneBy({ filepath });
+        const resp = await this.#publishOneBy({
+          filepath,
+          hintUpdate: hintStartUpdate
+        });
         type = resp.type;
         retArr.push({
           filepath,
           ret: resp.ret,
         });
-        hinter.loadSucc(filepath, { text: this.#getLoadHintTextBy({ type, filepath }) });
+        hintSucc(type, filepath);
       } catch (error) {
         retArr.push({
           filepath,
           ret: error,
         });
-        hinter.loadFail(filepath, { text: this.#getLoadHintTextBy({ type, filepath }) });
-        hinter.errMsg(error.message);
+        hintFail(type, filepath);
+        hintErr(error.message);
         throw error;
       }
     }));
@@ -382,7 +396,6 @@ export class IsuboCore {
   }
 
   async writeToClipboard({
-    print,
     filepathArr,
   } = {}) {
     const writeToClipboardOneBy = ({ filepath }) => {
@@ -394,16 +407,6 @@ export class IsuboCore {
       const title = this.#getPostTitleBy({ frontmatter, filepath });
       this.#addAssetpathRecord(filepath, assetPathsRelativeRepoArr);
       clipboard.writeSync(formatedMarkdown);
-
-      if (print) {
-        hinter.streamlog(formatedMarkdown);
-      }
-
-      hinter.streamlog('title:');
-      hinter.streamlog(title + '\n');
-
-      hinter.streamlog('tags:');
-      hinter.streamlog(frontmatter.tags.join(' ') + '\n');
 
       return {
         title,
