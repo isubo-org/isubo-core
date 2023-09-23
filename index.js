@@ -1,12 +1,11 @@
 import path from 'path';
-import prompts from 'prompts';
 import clipboard from 'clipboardy';
 import { ConfReader } from './lib/conf_reader.js';
 import { hinter } from './lib/hinter.js';
 import { PostManager } from './lib/post_manager.js';
 import { PostParse } from './lib/post_parse.js';
 import { AssetPublisher } from './lib/asset_publisher.js';
-import { enumDeployType, enumPushAssetType } from './lib/constants/enum.js';
+import { enumDeployType } from './lib/constants/enum.js';
 import { postPath } from './lib/post_path.js';
 import {
   isAtLeastOneOf, isDataObject, isFunction, isNonEmptyArray, isUndefined, requestQueue,
@@ -270,51 +269,12 @@ export class IsuboCore {
 
   async #publishAssets() {
     const conf = this.#conf;
-    const getAssetPublisherIns = () => new AssetPublisher({
+  
+    const assetPublisher = new AssetPublisher({
       conf,
       assetRecords: this.#assetpathRecords,
     });
-
-    let isPushAsset = false;
-    switch (conf.push_asset) {
-      case enumPushAssetType.DISABLE: {
-        isPushAsset = false;
-        const isExistUnpush = await (getAssetPublisherIns().checkIsUnpushPostAndAssets());
-        if (!isExistUnpush) {
-          break;
-        }
-
-        hinter.warnMsg('There are some posts and corresponding assets didn\'t publish, You should deal with it as soon as possible.');
-        break;
-      }
-
-      case enumPushAssetType.AUTO: {
-        if (!this.#assetpathRecords.length) {
-          hinter.warnMsg('Without any posts and relatived assets need to push!');
-          break;
-        }
-        isPushAsset = true;
-        break;
-      }
-
-      case enumPushAssetType.PROMPT:
-      default: {
-        if (!this.#assetpathRecords.length) {
-          hinter.warnMsg('Without any posts and relatived assets need to push!');
-          break;
-        }
-        isPushAsset = (await prompts({
-          type: 'confirm',
-          name: 'value',
-          message: 'Push the above posts and relatived assets?',
-          initial: true,
-        })).value;
-      }
-    }
-
-    if (isPushAsset) {
-      await getAssetPublisherIns().push();
-    }
+    return await assetPublisher.push();
   }
 
   // eslint-disable-next-line class-methods-use-this
