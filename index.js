@@ -3,7 +3,6 @@ import prompts from 'prompts';
 import clipboard from 'clipboardy';
 import { ConfReader } from './lib/conf_reader.js';
 import { hinter } from './lib/hinter.js';
-import { PostFinder } from './lib/post_finder.js';
 import { PostManager } from './lib/post_manager.js';
 import { PostParse } from './lib/post_parse.js';
 import { AssetPublisher } from './lib/asset_publisher.js';
@@ -19,11 +18,7 @@ export class IsuboCore {
 
   #cliParams = {};
 
-  #finder = null;
-
   #postManager = null;
-
-  #selectPosts = false;
 
   #assetpathRecords = [];
 
@@ -50,7 +45,6 @@ export class IsuboCore {
    * @typedef {Object} IsuboCtorParam1 - init with config data
    * @property {IsuboConf} conf
    * @property {CliParams} [cliParams]
-   * @property {boolean} [selectPosts]
    * @property {Hooks} [hooks]
    *
    * @param {IsuboCtorParam0|IsuboCtorParam1} param
@@ -64,7 +58,6 @@ export class IsuboCore {
       confPath,
       conf,
       cliParams,
-      selectPosts,
       hooks,
     } = param;
 
@@ -74,10 +67,8 @@ export class IsuboCore {
     });
     // TODO: compatile the input of filename and patterns
     this.#setHooks(hooks);
-    this.#selectPosts = !!selectPosts;
     this.#setCliParams(cliParams);
     this.#setPostManager();
-    this.#setFinder();
   }
 
   #setHooks(hooks) {
@@ -94,37 +85,6 @@ export class IsuboCore {
   #getLoadHintTextBy({ filepath, type }) {
     const { postTitle } = postPath.parse(filepath);
     return `${type} post: ${postTitle}`;
-  }
-
-  #setFinder() {
-    const conf = this.#conf;
-    const {
-      filename,
-      // patterns,
-      // pattern
-    } = this.#cliParams;
-    // TODO: achieve patterns and pattern
-
-    // const params = {
-    //   postTitleSeat: conf.post_title_seat
-    // };
-
-    // if (patterns) {
-    //   params.patterns = patterns;
-    // } else if (pattern) {
-    //   params.patterns = [pattern];
-    // } else {
-    //   params.sourceDir = conf.absolute_source_dir;
-    //   params.filename = filename;
-    // }
-
-    const params = {
-      postTitleSeat: conf.post_title_seat,
-      sourceDir: conf.absolute_source_dir,
-      filename,
-    };
-
-    this.#finder = new PostFinder(params);
   }
 
   /**
@@ -355,12 +315,6 @@ export class IsuboCore {
     if (isPushAsset) {
       await getAssetPublisherIns().push();
     }
-  }
-
-  async #getFilepaths() {
-    return this.#selectPosts
-      ? this.#finder.selectPosts()
-      : this.#finder.getFilepaths();
   }
 
   // eslint-disable-next-line class-methods-use-this
