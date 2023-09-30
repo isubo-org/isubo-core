@@ -15,7 +15,8 @@
     "prepare": "husky install",
     "commitlint": "commitlint --edit",
     "postversion": "git push && git push origin --tags",
-    "new-version": "git fetch origin main && git checkout main && git pull origin main && npx isubo-version"
+    "new-version": "git fetch origin main && git checkout main && git pull origin main && npx isubo-version",
+    "update-test-repo": "node ./scripts/update_test_repo.js"
   },
   "repository": {
     "type": "git",
