@@ -7,6 +7,7 @@ import { load as loadYaml, dump as yamlDump } from 'js-yaml';
 import { ConfReader } from '../../lib/conf_reader.js';
 import { FRONTMATTER } from '../../lib/constants/index.js';
 import { postPath } from '../../lib/post_path.js';
+import { PostFinder } from './post_finder.js';
 
 const DEST_SOURCE_PATH_PREFIX = '__test__/temp/source_';
 
@@ -229,5 +230,270 @@ export function getErrMsgFrom({ throwErrFunc }) {
     throwErrFunc();
   } catch (error) {
     return error.message;
+  }
+}
+
+/**
+1 init repo
+2 new a temp branch base on master;
+3  add one or several changes of post file;
+*/
+export class TempGitRepo {
+  static #cachePath = '__test__/temp/.cache/test-repo_deploy-posts-to-github-issue';
+  static #repo = 'git@github.com:isaaxite/test-repo_deploy-posts-to-github-issue.git';
+  #uniqueKey = getTimestampKey();
+  #repoLocalPath = getEnsureDirSync(`__test__/temp/git_repo_${this.#uniqueKey}`);
+  #conf = null;
+  #confPath = path.join(this.#repoLocalPath, 'isubo.conf.yml');
+  #sourceDir = path.join(this.#repoLocalPath, 'source');
+  #branch = `temp_branch_${this.#uniqueKey}`;
+  #simpleGitOpt = {
+    baseDir: this.#repoLocalPath,
+    binary: 'git',
+    maxConcurrentProcesses: 6,
+    trimmed: false,
+    config: ['http.proxy=127.0.0.1']
+  };
+  #git = simpleGit(this.#simpleGitOpt);
+  
+  constructor() {
+    // ensureDirSync(this.#repoLocalPath);
+    // console.info(this.#repoLocalPath)
+  }
+
+  get repoLocalPath() {
+    return this.#repoLocalPath;
+  }
+
+  get simpleGitOpt () {
+    return {
+      ...this.#simpleGitOpt,
+      config: [...this.#simpleGitOpt.config]
+    };
+  }
+
+  get git () {
+    return this.#git;
+  }
+
+  get confPath () {
+    return this.#confPath;
+  }
+
+  get sourceDir() {
+    return this.#sourceDir;
+  }
+
+  get conf() {
+    return this.#conf;
+  }
+
+  async init({
+    preConf: preConfFn
+  } = {}) {
+    let ret = null;
+    if (existsSync(path.join(TempGitRepo.#cachePath, 'isubo.conf.yml'))) {
+      copySync(TempGitRepo.#cachePath, this.#repoLocalPath);
+    } else {
+      getEnsureDirSync(TempGitRepo.#cachePath);
+      ret = await this.#git.clone(TempGitRepo.#repo, this.#repoLocalPath);
+      copySync(this.#repoLocalPath, TempGitRepo.#cachePath);
+    }
+    ret = await this.#git.checkout(['-b', this.#branch]);
+    updateConfFileSync(this.#confPath, (preConf) => {
+      preConf.source_dir = 'source/';
+      preConf.branch = 'master';
+      delete preConf.prefix;
+      delete preConf.post_dir;
+      preConfFn && preConfFn(preConf);
+      return preConf;
+    });
+
+    postPath.setConfBy({ confpath: this.#confPath });
+
+    const confReader = new ConfReader({ path: this.#confPath });
+    this.#conf = confReader.get();
+
+    const cwd = process.cwd();
+    process.chdir(this.#repoLocalPath);
+    execSync(`pnpm add ${cwd} && git add . && git commit -m "chore: tempGitRepo init"`);
+    process.chdir(cwd);
+
+    return ret;
+  }
+
+  #addNewPostSyncWithSeat(postname) {
+    const { post_title_seat } = this.#conf;
+    const lastPostname = path.parse(postname).name;
+    const postFinder = new PostFinder({
+      postTitleSeat: post_title_seat,
+      filename: lastPostname,
+      sourceDir: this.#sourceDir
+    });
+    const src = postFinder.getFilepaths().pop();
+    const detail = path.parse(src);
+    let pathItems = detail.dir.split(path.sep);
+    pathItems.push(detail.name);
+    pathItems.reverse();
+    let destPathIts = [...pathItems];
+
+    pathItems = pathItems.slice(post_title_seat);
+    pathItems.reverse();
+    const srcDir = pathItems.join(path.sep);
+
+    const destname = `${lastPostname}_${this.#uniqueKey}`;
+    // destPathIts = destPathIts.slice(post_title_seat);
+    destPathIts[post_title_seat] = destname;
+    const postPathIts = [...destPathIts];
+    postPathIts.reverse();
+    const postpath = postPathIts.join(path.sep) + detail.ext;
+
+    destPathIts = destPathIts.slice(post_title_seat);
+    destPathIts.reverse();
+    const destDir = destPathIts.join(path.sep);
+    copySync(srcDir, destDir);
+
+    const confReader = new ConfReader({ path: this.#confPath });
+    const conf = confReader.get();
+    const postParse = new PostParse({
+      path: postpath,
+      conf,
+      disable_immediate_formatAssetLink: true
+    });
+    const astRef = postParse.getAst();
+    const assetPatterns = [];
+    const format = (astChildren) => {
+      if (!astChildren || !astChildren.length) {
+        return;
+      }
+      for (const astRef of astChildren) {
+        if (conf.types.includes(astRef.type) && !astRef.url.startsWith('http')) {
+          const basename = path.basename(astRef.url);
+          assetPatterns.push(path.join(destDir, '**/', basename));
+        }
+        format(astRef.children);
+      }
+    };
+    format(astRef.children);
+
+    const assetpaths = fg.sync(assetPatterns);
+
+    return {
+      postpath: path.resolve(this.#repoLocalPath, postpath),
+      assetpaths
+    };
+  }
+
+  #addNewPostSync(postname) {
+    const destname = `${postname}_${this.#uniqueKey}`;
+
+    const { post_title_seat } = this.#conf;
+    const lastPostname = path.parse(postname).name;
+    const postFinder = new PostFinder({
+      postTitleSeat: post_title_seat,
+      filename: lastPostname,
+      sourceDir: this.#sourceDir
+    });
+    const src = postFinder.getFilepaths()[0];
+    const detail = path.parse(src);
+    const srcDir = path.join(detail.dir, detail.name);
+    detail.name = destname;
+    detail.base = detail.name + detail.ext;
+    const dest = path.format(detail);
+    const destDir = path.join(detail.dir, detail.name);
+
+    copySync(src, dest);
+    copySync(srcDir, destDir);
+    const confReader = new ConfReader({ path: this.#confPath });
+    const conf = confReader.get();
+    const postParse = new PostParse({
+      path: dest,
+      conf,
+      disable_immediate_formatAssetLink: true
+    });
+    const astRef = postParse.getAst();
+    const format = (astChildren) => {
+      if (!astChildren || !astChildren.length) {
+        return;
+      }
+      for (const astRef of astChildren) {
+        if (conf.types.includes(astRef.type)) {
+
+          astRef.url = astRef.url.replace(postname, destname);
+        }
+        format(astRef.children);
+      }
+    };
+
+    format(astRef.children);
+    const mdtxt = postParse.getFormatedMarkdown();
+    writeFileSync(dest, mdtxt);
+
+    return {
+      postpath: path.resolve(this.#repoLocalPath, dest),
+      assetpaths: readdirSync(destDir).map(it => path.resolve(
+        this.#repoLocalPath,
+        path.join(destDir, it)
+      ))
+    };
+  }
+
+  addNewPostSync(postname) {
+    const { post_title_seat } = this.#conf;
+    if (post_title_seat <= 0) {
+      return this.#addNewPostSync(postname);
+    }
+
+    return this.#addNewPostSyncWithSeat(postname);
+  }
+
+  #ensurePostDir(postTitle) {
+    const { post_title_seat } = this.#conf;
+
+    const mid = new Array(post_title_seat - 1).fill(() => `${String(Math.random()).slice(2)}`).map(exec => exec()).join(path.sep);
+
+    const dir = path.join(this.#sourceDir, postTitle, mid);
+    ensureDirSync(dir);
+    return dir;
+  }
+
+  adjustPostDirStruct() {
+    const { post_title_seat } = this.#conf;
+
+    if (post_title_seat <= 0) {
+      return;
+    }
+
+    const backSourceDir = `${this.#sourceDir}_backup`;
+    moveSync(this.#sourceDir, backSourceDir);
+    const postArr = fg.sync([`${backSourceDir}/**/*.md`]).map(postPath => {
+      const absolutePath = path.resolve(postPath);
+
+      return {
+        postTitle: path.parse(absolutePath).name,
+        postPath: absolutePath,
+        assetDirPath: absolutePath.replace('.md', '')
+      };
+    });
+
+    ensureDirSync(this.#sourceDir);
+
+    for (const it of postArr) {
+      const postDir = this.#ensurePostDir(it.postTitle);
+      moveSync(it.postPath, path.join(postDir, path.basename(it.postPath)));
+      moveSync(it.assetDirPath, path.join(postDir, path.basename(it.assetDirPath)));
+    }
+
+    removeSync(backSourceDir);
+  }
+
+  touch() {
+    const dest = path.join(this.#repoLocalPath, `temp_${this.#uniqueKey}.txt`);
+    writeFileSync(dest, `temp_${this.#uniqueKey}`);
+    return path.relative(this.#repoLocalPath, dest);
+  }
+
+  async addStaged(filepaths) {
+    await this.#git.add(filepaths)
   }
 }
