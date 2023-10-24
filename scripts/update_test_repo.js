@@ -1,4 +1,4 @@
-import fs from 'fs';
+import fs, { existsSync } from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import { ensureDirSync } from 'fs-extra/esm';
@@ -16,16 +16,26 @@ function execCmdSync(cmd) {
   });
 }
 
+function linkIsuboCore() {
+  if (existsSync('./node_modules/isubo-core')) {
+    return;
+  }
+  console.info(cwd)
+  execCmdSync(`npm i ${cwd}`);
+}
+
 function main() {
   if (fs.existsSync(TEST_REPO_CWD)) {
     process.chdir(TEST_REPO_CWD);
     execCmdSync('git fetch origin master && git checkout master && git pull origin master');
+    linkIsuboCore();
     return;
   }
 
   ensureDirSync(TEST_REPO_DIR);
   process.chdir(TEST_REPO_DIR);
   execCmdSync(`git clone git@github.com:isaaxite/test-repo_deploy-posts-to-github-issue.git`);
+  linkIsuboCore();
 }
 
 main();

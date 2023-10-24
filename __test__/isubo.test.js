@@ -58,7 +58,7 @@ describe('Class IsuboCore, init instance', () => {
 
 
 describe('Class IsuboCore, method test', () => {
-  sleepFactory(test.only.each([
+  sleepFactory(test.each([
     {
       name: 'disable push assets',
       push_asset: enumPushAssetType.DISABLE

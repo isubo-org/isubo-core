@@ -1,6 +1,6 @@
 import path from 'path';
 import fg from 'fast-glob';
-import { writeFileSync, readFileSync, existsSync } from 'fs';
+import { writeFileSync, readFileSync, existsSync, readdirSync } from 'fs';
 import { copySync, removeSync, ensureDirSync } from 'fs-extra/esm';
 import { PostParse } from '../../lib/post_parse.js';
 import { load as loadYaml, dump as yamlDump } from 'js-yaml';
@@ -8,6 +8,8 @@ import { ConfReader } from '../../lib/conf_reader.js';
 import { FRONTMATTER } from '../../lib/constants/index.js';
 import { postPath } from '../../lib/post_path.js';
 import { PostFinder } from './post_finder.js';
+import simpleGit from 'simple-git';
+import { execSync } from 'child_process';
 
 const DEST_SOURCE_PATH_PREFIX = '__test__/temp/source_';
 
@@ -314,10 +316,12 @@ export class TempGitRepo {
     const confReader = new ConfReader({ path: this.#confPath });
     this.#conf = confReader.get();
 
-    const cwd = process.cwd();
-    process.chdir(this.#repoLocalPath);
-    execSync(`pnpm add ${cwd} && git add . && git commit -m "chore: tempGitRepo init"`);
-    process.chdir(cwd);
+    // const cwd = process.cwd();
+    // process.chdir(this.#repoLocalPath);
+    // const cmd = `npm i ${cwd} && git add . && git commit -m "chore: tempGitRepo init"`;
+    // console.info(cmd);
+    // execSync(cmd, { shell: true, stdio: 'inherit' });
+    // process.chdir(cwd);
 
     return ret;
   }

@@ -36,7 +36,11 @@ function createPostsFactory({
     process.chdir(tempGitRepo.repoLocalPath);
 
     const isubo = new IsuboCore(params);
-    const retArr = (await isubo.create(createParams));
+    const lastCreateParams = {
+      filepathArr: params.cliParams.filename.map(s => path.join(tempGitRepo.sourceDir, s)),
+      ...(createParams || {})
+    };
+    const retArr = (await isubo.create(lastCreateParams));
     const lastRet = [];
 
     for (const ret of retArr) {
@@ -82,7 +86,9 @@ export async function create_a_post_but_disable_push_assets () {
     confPath: tempGitRepo.confPath,
     selectPosts: false,
   });
-  const ret = (await isubo.create()).pop();
+  const ret = (await isubo.create({
+    filepathArr: [postpath]
+  })).pop();
   process.chdir(cwd);
   return ret;
 }
@@ -156,8 +162,9 @@ export async function update_one_post(cb) {
   }));
   const conf = tempRepo.conf;
   // if(1) return console.info(conf)
+  const postpath = path.join(tempRepo.tempSourceDir, 'license.md');
   const postParse = new PostParse({
-    path: path.join(tempRepo.tempSourceDir, 'license.md'),
+    path: postpath,
     conf
   });
   postParse.injectFrontmatter({
@@ -169,7 +176,9 @@ export async function update_one_post(cb) {
       filename: 'license'
     }
   });
-  const ret = (await isubo.update()).pop();
+  const ret = (await isubo.update({
+    filepathArr: [postpath],
+  })).pop();
 
   cb && cb(ret);
 
@@ -181,7 +190,13 @@ export async function write_to_clipboard() {
   const tempGitRepo = new TempGitRepo();
   await tempGitRepo.init({
     preConf(conf) {
-      conf.source_statement.enable = false;
+      if (!conf.source_statement) {
+        conf.source_statement = {
+          enable: false
+        };
+      } else {
+        conf.source_statement.enable = false;
+      }
     }
   });
   const delStartEndLastLines = (s) => s.split('\n').slice(1, -1).join('\n');
@@ -214,7 +229,9 @@ export async function write_to_clipboard() {
     selectPosts: false,
   });
 
-  await isubo.writeToClipboard({ print: true });
+  await isubo.writeToClipboard({
+    filepathArr: [ret.postPath],
+  });
 
   ret.formatedPostContent = clipboard.readSync().replace('\n', '');
   process.chdir(cwd);
