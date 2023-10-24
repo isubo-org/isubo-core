@@ -1,4 +1,6 @@
 # Changelog
+### [0.0.1-alpha.3](https://github.com/isubo-org/isubo-core/compare/v0.0.1-alpha.2...v0.0.1-alpha.3) (2023-10-24)
+
 ### [0.0.1-alpha.2](https://github.com/isubo-org/isubo-core/compare/v0.0.1-alpha.1...v0.0.1-alpha.2) (2023-10-24)
 
 
