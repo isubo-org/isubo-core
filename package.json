@@ -11,12 +11,18 @@
     "test": "jest",
     "esm-test": "npx jest --clearCache && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
     "only-test": "./jest.js",
+    "update-test-reports": "npm run esm-test && (git add ./reports && git commit -m 'chore: update test reports') || git checkout ./reports",
     "build": "node ./scripts/build.js",
     "prepare": "husky install",
     "commitlint": "commitlint --edit",
     "postversion": "git push && git push origin --tags",
     "new-version": "git fetch origin main && git checkout main && git pull origin main && npx isubo-version",
     "update-test-repo": "node ./scripts/update_test_repo.js"
+  },
+  "standard-version": {
+    "scripts": {
+      "posttag": "npm run postversion"
+    }
   },
   "repository": {
     "type": "git",
