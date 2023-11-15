@@ -11,6 +11,8 @@ import {
 } from './lib/utils/index.js';
 import { AtLeastPropError, CtorParamDataObjectError, DataObjectError } from './lib/utils/error.js';
 
+export { enumPushAssetType } from './lib/constants/enum.js';
+
 export class IsuboCore {
   #conf = {};
 
@@ -23,6 +25,10 @@ export class IsuboCore {
   #hooks = {
     beforeDeploy: async () => {},
   };
+
+  get conf () {
+    return this.#conf;
+  }
 
   /**
    * @typedef {Object} CliParams
@@ -258,7 +264,7 @@ export class IsuboCore {
     };
   }
 
-  async #publishAssets() {
+  async publishAssets() {
     const conf = this.#conf;
   
     const assetPublisher = new AssetPublisher({
@@ -309,7 +315,7 @@ export class IsuboCore {
     }));
 
     // TODO: if exist deploy item err, it's record should be remove from this.#assetpathRecords
-    await this.#publishAssets();
+    await this.publishAssets();
 
     return retArr;
   }
@@ -344,7 +350,7 @@ export class IsuboCore {
       }
     }));
 
-    await this.#publishAssets();
+    await this.publishAssets();
 
     return retArr;
   }
@@ -390,7 +396,7 @@ export class IsuboCore {
       }
     }));
 
-    await this.#publishAssets();
+    await this.publishAssets();
 
     return retArr;
   }
