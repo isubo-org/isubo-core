@@ -45,9 +45,12 @@ export function deleteScripts() {
         'build',
         'prepare',
         'publish',
-        'postversion'
+        'postversion',
       )
     };
+
+    delete distPkg.type;
+    delete distPkg.directories;
 
     shouldUpdate = true;
   }
