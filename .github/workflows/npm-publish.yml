@@ -67,6 +67,7 @@ jobs:
           path: ./dist
 
       - name: Publish artifact to npm
-        run: npx isubo-publish --skin-login --skin-build
+        # run: npx isubo-publish --skin-login --skin-build
+        run: echo 'test' 
         env:
           NODE_AUTH_TOKEN: ${{secrets.ISUBO_ORG_NPM_TOKEN}}

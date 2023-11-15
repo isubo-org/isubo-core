@@ -63,8 +63,17 @@ export function deleteScripts() {
   }
 
   if (shouldUpdate) {
+    execSync(`echo 1`, {
+      stdio: 'inherit',
+      shell: true
+    });
     fs.writeFileSync(distPkgPath, JSON.stringify(distPkg, null, 2));
   }
+
+  execSync(`pwd && cat ${distPkgPath}`, {
+    stdio: 'inherit',
+    shell: true
+  });
 }
 
 function main() {
@@ -86,7 +95,7 @@ function main() {
     shell: true
   });
 
-  process.exit(0);
+  process.exit(1);
 }
 
 main();
