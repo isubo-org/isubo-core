@@ -38,13 +38,6 @@ const cjs = {
     }),
     json(),
     commonjs(),
-    // terser(),
-    copy({
-      targets: [
-        // { src: 'assets/conf.template.yml', dest: 'dist/assets' },
-        { src: ['package.json', 'README.md'], dest: 'dist/' },
-      ]
-    })
   ],
   external: ['markdown-toc']
 };

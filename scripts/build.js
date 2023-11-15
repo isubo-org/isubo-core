@@ -49,9 +49,16 @@ export function deleteScripts() {
       )
     };
 
-    delete distPkg.type;
-    delete distPkg.directories;
+    shouldUpdate = true;
+  }
 
+  if (pkgJson?.type) {
+    delete distPkg.type;
+    shouldUpdate = true;
+  }
+
+  if (pkgJson?.directories) {
+    delete distPkg.directories;
     shouldUpdate = true;
   }
 
